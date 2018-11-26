@@ -2,16 +2,16 @@
 #define red 11
 #define green 12
 
-#define sensorr 0 //PIN for analog sensors
-#define sensorl 1
-#define sensorc 2
+#define sensorr A0 //PIN for analog sensors
+#define sensorl A1
+#define sensorc A2
 
 #define leftm 6  //MOTOR PWM pins
 #define rightm 5
 
 #define straight_speed 200 //speed values
-#define turning_speed 110
-#define slight_turning_speed 160
+#define turning_speed 180
+#define slight_turning_speed 120
 #define stop_speed 0
 #define time 100
 
@@ -20,6 +20,49 @@
 #define right_thresh 100
 int end_count = 0;
 
+#define stop 0
+#define low 1
+#define medium 2
+#define high 3
+
+#define left 0
+#define right 1
+#define center 2
+int last_signal;
+
+
+void right_motor_set(int speed){
+  if(speed == stop){
+    analogWrite(rightm, stop_speed);
+  }
+  else if(speed == low) {
+    analogWrite(rightm, slight_turning_speed + 52);
+  }
+  else if(speed == medium){
+    analogWrite(rightm, turning_speed+ 52);
+  }
+ else  if(speed == high){
+    analogWrite(rightm, straight_speed + 52);
+  }
+  
+}
+
+void left_motor_set(int speed){
+  if(speed == stop){
+    analogWrite(leftm, stop_speed);
+  }
+  else if(speed == low) {
+    analogWrite(leftm, slight_turning_speed);
+  }
+  else if(speed == medium){
+    analogWrite(leftm, turning_speed);
+  }
+ else  if(speed == high){
+    analogWrite(leftm, straight_speed);
+  }
+  
+}
+
 void setup() {
   // put your setup code here, to run once:
   pinMode(blue, OUTPUT); //initialize 
@@ -27,6 +70,9 @@ void setup() {
   pinMode (green, OUTPUT);
   pinMode(leftm, OUTPUT);
   pinMode(rightm, OUTPUT);
+  pinMode(sensorl, INPUT);
+  pinMode(sensorr, INPUT);
+  pinMode(sensorc, INPUT);
   Serial.begin (9600);
 }
 
@@ -70,7 +116,7 @@ void end_light(){ //blue and red turn on when all sensors sense black
 
 void loop() {
   int leftvol = analogRead(sensorl); // next three lines init sensors
-  int rightvol = analogRead(sensorr);
+  int rightvol = analogRead(sensorr) + 20;
   int centervol = analogRead (sensorc);
   unsigned long currentMillis = millis();
   
@@ -78,7 +124,7 @@ void loop() {
   Serial.print("  ");
   Serial.print(rightvol);
   Serial.print("  ");
-  Serial.println (centervol*2);
+  Serial.println (centervol);
 
   
   bool left_signal = (leftvol > left_thresh) && (rightvol < right_thresh) && (centervol < center_thresh); // 1,2,3 are basic cases for going forward, left and right based on IR sensors
@@ -93,34 +139,44 @@ void loop() {
 
 
   if(straight_signal){ //if the middle sensor is at the threshhold and neither the others is, then keep going straight and green on
-    analogWrite(rightm, straight_speed);
-    analogWrite(leftm, straight_speed);
+    right_motor_set(high);
+   left_motor_set(high);
     middle_light();
   }
   else if(left_signal){ //left sensor is being detected, so therefore you must slow down left motor so right motor can overtake so the car can turn, and the left light is the blue light
-    analogWrite(rightm, straight_speed);
-    analogWrite(leftm, turning_speed);
+    right_motor_set(high);
+   left_motor_set(stop);
     left_light();
+    last_signal = right;
   }
   else if (right_signal){ //right sensor is being detected, so slow down right motor and keep left motor at straight speed to overtake ,and red light is right light
-    analogWrite(rightm, turning_speed);
-    analogWrite(leftm, straight_speed);
+    right_motor_set(stop);
+   left_motor_set(high);
     right_light();
+    last_signal = left;
   }
-  else if(left_straigh_signal) { //when left & middle are on threshhold, then kinda go left by slightly weakning left motor
-    analogWrite(rightm, straight_speed);
-    analogWrite(leftm, slight_turning_speed);
+  else if(left_straight_signal) { //when left & middle are on threshhold, then kinda go left by slightly weakning left motor
+    right_motor_set(high);
+   left_motor_set(medium);
     left_light();
   }
-  else if(right_straigh_signal) { //when right & middle are on threshhold, then kinda go left by slightly weakning right motor
-    analogWrite(rightm, slight_turning_speed);
-    analogWrite(leftm, straight_speed);
+  else if(right_straight_signal) { //when right & middle are on threshhold, then kinda go left by slightly weakning right motor
+    right_motor_set(medium);
+   left_motor_set(high);
     right_light();
   }
   else if(no_signal){ //No signal means we've gone off the track, therefore we can't do anything, just keep going forwards & turn all lights on as indication of error
-    analogWrite(rightm, straight_speed);
-    analogWrite(leftm, straight_speed)
-    no_light();
+   right_motor_set(medium);
+   left_motor_set(medium);
+    no_light(); //aka ALL LIGHT
+    if(last_signal = left){
+      right_motor_set(high);
+      left_motor_set(stop);
+    }
+    else if(last_signal = right){
+      right_motor_set(stop);
+      left_motor_set(high);
+    }
     
   }
   else if(end_signal){ //we have to check if there is the end line twice so we have a counter in the init part of the code that will count how many times
@@ -128,11 +184,11 @@ void loop() {
       end_count++;
     }
     if(end_count == 1){ //initate shutdown sequence
-      analogWrite(rightm, stop_speed);
-      analogWrite(leftm, stop_speed);
+      left_motor_set(stop);
+      right_motor_set(stop);
       end_light();
-      delay(5000);
-      exit(0); //online forums says this is supposed to allow the loop to exit, but idk we'll see
+      //delay(5000);
+     // exit(0); //online forums says this is supposed to allow the loop to exit, but idk we'll see., IT WORKS BUT ONLY ENABLE IN ACTUAL
     }
   }
 
